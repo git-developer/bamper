@@ -1,0 +1,27 @@
+{
+  "name": "pimper",
+  "version": "1.0.0",
+  "description": "Pipe MQTT Publisher",
+  "main": "main.js",
+  "type": "module",
+  "dependencies": {
+    "debug": "^4.3.5",
+    "deepmerge": "^4.3.1",
+    "dot-object": "^2.1.5",
+    "mqtt": "^5.7.0",
+    "named-pipe": "^1.0.0",
+    "yaml": "^2.4.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/git-developer/pimper.git"
+  },
+  "keywords": [
+    "MQTT"
+  ],
+  "author": "git-developer",
+  "license": "GPL-3.0-or-later"
+}

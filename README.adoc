@@ -1,0 +1,295 @@
+= PIMPER
+:toc:
+A PIpe Message PublishER.
+
+== TL;DR
+**What?** Publish output of one or more programs via MQTT using a single, persistent connection.
+
+**How?** Start a PIMPER container and let producers write lines containing topic and message to a named pipe.
+
+== Overview
+Main purpose of this project is to publish output from programs to an MQTT broker without a DNS lookup and TCP connection per message. It establishes a single connection to an MQTT broker and then continuously publishes output from other programs or files.
+
+image::overview.svg[Overview]
+
+This tool addresses a feature that is missing in `mosquitto_pub`, namely allowing a topic per message
+(https://github.com/eclipse/mosquitto/issues/3060[mosquitto #3060]).
+PIMPER might become obsolete once this feature is implemented.
+
+== Usage
+=== Setup
+==== Communication via pipes
+In a containerized world, applications usually communicate over the network. The main purpose of this project is to reduce network overhead, so this would be no good fit here. Thus, producers send messages through a pipe in the file system. PIMPER comes with a default pipe that producers can use. It is also possible to configure one or more pipes manually.
+
+NOTE: A pipe is not 1:1 but n:m, so multiple producers can use the same pipe.
+
+==== Example: Simple configuration for a containerized producer
+Run `docker compose up` with this configuration to
+
+. Start PIMPER in a container
+. Export the default pipe in a volume
+. Start a demo producer in another container
+
+.compose.yml
+```yaml
+---
+services:
+  pimper:
+    image: ghcr.io/git-developer/pimper
+    container_name: pimper
+    init: true
+    command:
+      - 'mqtt://broker'
+    volumes:
+      - 'sources:/var/run/pimper'
+
+  producer:
+    image: busybox
+    init: true
+    volumes:
+      - 'sources:/var/run/pimper'
+    command:
+      - sh
+      - '-c'
+      - |
+        while true; do
+          printf '%s %s\n' pimper/demo/date "$(date)"
+          sleep 2
+        done >>/var/run/pimper/source
+    depends_on:
+      - pimper
+ 
+volumes:
+  sources:
+```
+
+==== Example: Separate configurations for a containerized producer
+Producers do not need to be declared within the same Compose configuration as PIMPER. To redirect messages from other containers, just mount the volume into them:
+
+.pimper/compose.yml
+```yaml
+---
+services:
+  pimper:
+    image: ghcr.io/git-developer/pimper
+    container_name: pimper
+    init: true
+    command:
+      - 'mqtt://broker'
+    volumes:
+      - 'sources:/var/run/pimper'
+volumes:
+  sources:
+```
+.producer/compose.yml
+```yaml
+---
+services:
+  producer:
+    image: busybox
+    init: true
+    volumes:
+      - 'pimper_sources:/var/run/pimper'
+    command:
+      - sh
+      - '-c'
+      - |
+        while true; do
+          printf '%s %s\n' pimper/demo/date "$(date)"
+          sleep 2
+        done >>/var/run/pimper/source
+volumes:
+  pimper_sources:
+    external: true
+```
+
+==== Example: Manual setup for a non-containerized producer
+This example shows how to use a producer that is not running as Docker container.
+
+```sh
+# Start a demo subscriber to see messages
+$ mosquitto_sub -v -L mqtt://broker/pimper/# &
+
+# Create a pipe
+$ mkfifo -m 666 /tmp/pimper-pipe
+
+# Start PIMPER
+$ docker run -d --rm -v /tmp/pimper-pipe:/var/run/pimper/source ghcr.io/git-developer/pimper mqtt://broker >/dev/null
+pimper/status mqttjs_f0212988 is connected
+
+# Publish a few messages
+$ for i in 1 2 3; do echo "pimper/demo" "This is demo message ${i}"; sleep 1; done >>/tmp/pimper-pipe
+
+# This output is coming from mosquitto_sub
+pimper/demo This is demo message 1
+pimper/demo This is demo message 2
+pimper/demo This is demo message 3
+pimper/status mqttjs_f0212988 is disconnected (Cause: /var/run/pimper/source was closed)
+
+# Stop demo subscriber
+$ pkill mosquitto_sub
+[1] + Done                       mosquitto_sub -v -L mqtt://broker/pimper/#
+```
+
+== Message Format
+Messages are read line-by-line from the source pipe(s). Each line is expected in this format:
+
+_<TOPIC> <SEPARATOR> <PAYLOAD> <NEWLINE>_
+
+Default for the separator is a space character (`⎵`).
+The payload may contain space characters.
+
+Example:
+```
+sensors/outside/temp 25°C
+monitoring/living-room/status No Problems
+```
+
+If a producer is unable to output this format, an adapter (e.g. a shell script) can be introduced to convert the program output before it is written to the PIMPER source pipe.
+
+== Configuration
+=== Syntax
+* Configuration can be done via a YAML file and/or command line arguments.
+* When both are given, command line arguments have priority over file configuration.
+* The default path for the configuration file is `/etc/pimper.yml`. It may be overriden via environment variable `PIMPER_CONFIG_PATH`.
+* Command line arguments are expected as key/value pairs.
+** Key and value separated by an `=` character without spaces.
+** Keys are expected in dotted notation. List items are represented as 0-based index number.
+** When the URL of the first MQTT broker contains no `=`, its key may be omitted, i.e. `targets.0.file=mqtt://broker` is the same as `mqtt://broker`.
+
+[cols="1,3a,3a"]
+.Examples
+|===
+|Description|YAML|Command Line Arguments
+
+|Read from `/pipe`, publish to `broker`
+|```yaml
+---
+sources:
+  - file: /pipe
+targets:
+  - url: "mqtt://broker"
+```
+|
+_none_
+
+|Read from `/pipe`, publish to `broker`
+|
+_none_
+|
+```
+sources.0.file=/pipe targets.0.url=mqtt://broker
+```
+
+|Override broker from YAML with arg
+|
+```yaml
+---
+sources:
+  - file: /pipe
+targets:
+  - url: "mqtt://broker"
+```
+|
+```
+targets.0.url=mqtt://custom-broker
+```
+
+|===
+
+=== Options
+.Main Configuration
+[cols="1,2a,1a,4a"]
+|===
+
+|Variable|Description|Allowed values|Default
+|`sources`|List of sources|_Source_ definitions|
+```yaml
+  - file: /var/run/pimper/source
+```
+|`targets`|List of targets|_Target_ definitions|_none_
+|`topicSeparator`|Separator between topic and message for all sources|Any string|`⎵` (Space)
+|===
+
+[cols="3,4,5a,3,3"]
+.Source Definition
+|===
+|Variable|Description|Allowed values|Default|Example
+
+|`file`|Path of the source in the file system|Path to a readable file|`/var/run/pimper/source`|`/dev/stdin`
+|`topicSeparator`|Separator between topic and message for this source|Any string|`topicSeparator` from the main configuration|`:`
+|`onClose`
+|Behavior when the source file is closed
+| * `shutdown`: Shutdown the application
+* `reopen`: Reopen the source
+* `ignore`: Do nothing
+|`shutdown`|`reopen`
+|===
+
+[cols="2,2,2,1,3a"]
+.Target Definition
+|===
+|Variable|Description|Allowed values|Default|Example
+
+|`url`|MQTT URL|URL containing at least protocol (`mqtt` or `mqtts`) and broker hostname|None|`mqtt://broker?clientId=demo-client`
+|`options`|MQTT options|https://github.com/mqttjs/MQTT.js?tab=readme-ov-file#client[mqttjs options]|None|
+```yaml
+options:
+  clientId: demo-client
+```
+|`statusTopic`|MQTT topic for status messages|MQTT topic|`pimper/status`|`management/pimper`
+|`caFile`|CA certificate|File path|None|`/opt/custom-ca.crt`
+|===
+
+=== YAML Examples
+==== Single source, single broker
+```yaml
+---
+targets:
+  - url: "mqtt://broker"
+```
+
+==== MQTT via TLS connection, custom client id
+```yaml
+---
+targets:
+  - url: "mqtts://broker"
+    caFile: /opt/custom-ca.crt
+    options:
+      clientId: pimper-tls-demo
+```
+
+==== Complex use case with multiple sources and targets
+```yaml
+topicSeparator: ':'
+sources:
+  - file: /dev/stdin
+    topicSeparator: ' '
+  - file: /var/run/pimper/source
+    onClose: reopen
+  - file: /tmp/messages
+    topicSeparator: ','
+    onClose: ignore
+targets:
+  - url: "mqtt://broker-1?clientId=demo-client"
+  - url: "mqtts://broker-2"
+    caFile: /opt/ca.crt
+    statusTopic: pimper/management
+    options:
+      clientId: tls-client
+```
+
+=== Environment Variables
+PIMPER uses the https://www.npmjs.com/package/debug[debug] package. To enable debug messages, include the `pimper` module in the environment variable `DEBUG`. Example:
+```yaml
+---
+services:
+  pimper:
+    environment:
+      DEBUG: 'pimper:*,mqttjs*'
+      DEBUG_DEPTH: 5
+```
+
+== References
+* https://github.com/mqttjs/MQTT.js[MQTT.js] - A client library for the MQTT protocol
+* https://mosquitto.org/[Mosquitto] - An Open Source MQTT Broker
