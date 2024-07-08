@@ -35,6 +35,10 @@ class Pimper {
 
     const mainCfg = new ConfigLoader(this.name).load(args);
 
+    if (!mainCfg.targets || mainCfg.targets.length == 0) {
+      throw new Error("The configuration is missing a target.");
+    }
+
     mainCfg.targets.forEach(targetCfg =>
       this.publishers.push(new MqttPublisher(this.name, targetCfg)));
 
@@ -55,6 +59,7 @@ class Pimper {
 
       const [level, message] = code === CODE_ERROR ? ['error', `${cause.name}: ${cause.message}`] : ['info', cause];
       this.log[level](message);
+      this.log.debug(cause);
 
       const stopActions = [...this.providers, ...this.publishers].reduce(
         (all, s) => all.concat(new Promise(resolve => s.stop(code, message, resolve))), []);

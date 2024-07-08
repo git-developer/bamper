@@ -4,7 +4,7 @@ import DotObject from 'dot-object';
 import fs from 'fs';
 import YAML from 'yaml';
 
-const DEFAULT_CONFIG = { sources: [{}]  };
+const DEFAULT_CONFIG = { sources: [{}], targets: [] };
 const DEFAULT_CONFIG_PATH = '/etc/pimper.yml';
 const DEFAULT_ARG_KEY = 'targets.0.url';
 const ENCODING = 'utf-8';
@@ -38,7 +38,7 @@ class ConfigLoader {
   splitArg = separator => (arg) => {
     const index = arg.indexOf(separator);
     var key, value;
-    if (index > 0) {
+    if (index > 0 && !URL.canParse(arg)) {
       [key, value] = [arg.substring(0, index), arg.substring(index + separator.length)];
     } else {
       this.log.info('Using unqualified arg %o as URL', arg);

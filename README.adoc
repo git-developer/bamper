@@ -217,7 +217,8 @@ options:
 * Command line arguments are expected as key/value pairs.
 ** Key and value separated by an `=` character without spaces.
 ** Keys are expected in dotted notation. List items are represented as 0-based index number.
-** When the URL of the first MQTT broker contains no `=`, its key may be omitted, i.e. `targets.0.file=mqtt://broker` is the same as `mqtt://broker`.
+** The key for the URL of the first MQTT broker may be omitted,
+   i.e. `targets.0.url=mqtt://broker` is the same as `mqtt://broker`.
 
 [cols="1,3a,3a"]
 .Examples
