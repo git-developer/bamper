@@ -130,7 +130,7 @@ $ docker run -d --rm -v /tmp/pimper-source:/var/run/pimper/source ghcr.io/git-de
 pimper/status mqttjs_f0212988 is connected
 
 # Publish a few messages
-$ for i in 1 2 3; do echo "pimper/demo" "This is demo message ${i}"; sleep 1; done >>/tmp/pimper-pipe
+$ for i in 1 2 3; do echo "pimper/demo" "This is demo message ${i}"; sleep 1; done >>/tmp/pimper-source
 
 # This output is coming from mosquitto_sub
 pimper/demo This is demo message 1
