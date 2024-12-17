@@ -32,7 +32,7 @@ jobs:
           - platform: linux/arm64
             node: lts-alpine
           - platform: linux/arm/v7
-            node: 18-alpine
+            node: lts-alpine
     steps:
       -
         name: Prepare
