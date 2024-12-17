@@ -32,7 +32,7 @@ jobs:
           - platform: linux/arm64
             node: lts-alpine
           - platform: linux/arm/v7
-            node: alpine
+            node: lts-alpine
     steps:
       -
         name: Prepare
@@ -52,7 +52,7 @@ jobs:
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          image: tonistiigi/binfmt:qemu-v8.1.5
+          image: commontorizon/binfmt:9.0.2
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
