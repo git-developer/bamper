@@ -32,7 +32,7 @@ jobs:
           - platform: linux/arm64
             node: lts-alpine
           - platform: linux/arm/v7
-            node: alpine
+            node: lts-alpine
     steps:
       -
         name: Prepare
@@ -52,6 +52,8 @@ jobs:
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
+          # qemu-v8.1.5 is latest binfmt release;
+          # qemu#1729 reports qemu 8.2.7 as working (as of 2024-10-21)
           image: tonistiigi/binfmt:qemu-v8.1.5
       -
         name: Set up Docker Buildx
